@@ -1,0 +1,79 @@
+mads 2.1.4 build 1 (22 Oct 21)
+Source: main.asm
+     1 				; EdVenture - An Adventure in Atari 8-Bit Assembly
+     2 				; github.com/edsalisbury/edventure
+     3 				; Mission: EdPossible
+     4 				; youtube.com/MissionEdPossible
+     5 				; Assemble in MADS: mads -l -t main.asm
+     6 				; Video 3: Fun with character sets!
+     7
+     8 					org $2000
+     9
+    10 = 0230			SDLSTL = $0230  ; Display list starting address
+    11 = 02F4			CHBAS = $02f4   ; CHaracter BAse Register
+    12
+    13 = 3C00			charset = $3c00 ; Character Set
+    14 = 4000			screen = $4000  ; Screen buffer
+    15 = 0070			blank8 = $70    ; 8 blank lines
+    16 = 0040			lms = $40	    ; Load Memory Scan
+    17 = 0041			jvb = $41	    ; Jump while vertical blank
+    18
+    19 = 0002			antic2 = 2      ; Antic mode 2
+    20 = 0005			antic5 = 5	    ; Antic mode 5
+    21
+    22 				; Load display list
+    23 FFFF> 2000-2051> A9 2C + 	mwa #dlist SDLSTL
+    24
+    25 				; Set up character set
+    26 200A A9 3C 8D F4 02		mva #>charset CHBAS
+    27
+    28 200F A2 00			ldx #0
+    29 2011			loop
+    30 2011 BD 42 20 9D 00 3C		mva chars,x charset,x
+    31 2017 E8				inx
+    32 2018 E0 10			cpx #16
+    33 201A D0 F5			bne loop
+    34
+    35 201C A0 00			ldy #0
+    36 201E			loop2
+    37 201E B9 40 20 99 00 40		mva scene,y screen,y
+    38 2024 C8				iny
+    39 2025 C0 02			cpy #2
+    40 2027 D0 F5			bne loop2
+    41
+    42 2029 4C 29 20			jmp *
+    43
+    44 				; Display List
+    45 202C			dlist
+    46 202C 70 70 70			.byte blank8, blank8, blank8
+    47 202F 45 00 40			.byte antic5 + lms, <screen, >screen
+    48 2032 05 05 05 05 05 05		.byte antic5, antic5, antic5, antic5, antic5, antic5
+    49 2038 05 05 05 05 05		.byte antic5, antic5, antic5, antic5, antic5
+    50 203D 41 2C 20			.byte jvb, <dlist, >dlist
+    51
+    52 				; %00 = 0
+    53 				; %01 = 1
+    54 				; %10 = 2
+    55 				; %11 = 3
+    56
+    57 2040			scene
+    58 2040 00 01			.byte " !"
+    59
+    60 2042			chars
+    61 2042 00				.byte %00000000
+    62 2043 03				.byte %00000011
+    63 2044 0F				.byte %00001111
+    64 2045 3F				.byte %00111111
+    65 2046 3F				.byte %00111111
+    66 2047 0F				.byte %00001111
+    67 2048 03				.byte %00000011
+    68 2049 00				.byte %00000000
+    69
+    70 204A 00				.byte %00000000
+    71 204B C0				.byte %11000000
+    72 204C F0				.byte %11110000
+    73 204D FC				.byte %11111100
+    74 204E FC				.byte %11111100
+    75 204F F0				.byte %11110000
+    76 2050 C0				.byte %11000000
+    77 2051 00				.byte %00000000
