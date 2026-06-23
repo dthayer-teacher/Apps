@@ -1,5 +1,7 @@
 client_secret.json
+client_secret2.json
 token.json
 credentials.json
 .streamlit/secrets.toml
 __pycache__/
+*.pyc
