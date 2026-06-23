@@ -133,7 +133,10 @@ with tab1:
         result = st.radio("Result", ["Made", "Missed"], horizontal=True)
         st.subheader("Click Shot Location")
 
-        court_img = Image.open("court.png")
+        from pathlib import Path
+
+        BASE_DIR = Path(__file__).parent
+        court_img = Image.open(BASE_DIR / "court.png")
 
         col1, col2, col3 = st.columns([1, 4, 1])
 
