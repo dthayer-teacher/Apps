@@ -5,3 +5,4 @@ google-auth
 plotly
 streamlit-image-coordinates
 Pillow
+requests
