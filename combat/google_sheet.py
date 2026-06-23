@@ -1,8 +1,8 @@
 import requests
-import pandas as pd
 import streamlit as st
 
 APPS_SCRIPT_URL = st.secrets["google"]["apps_script_url"]
+
 
 class SheetWrapper:
     def append_row(self, row):
@@ -18,11 +18,21 @@ class SheetWrapper:
         }
 
         response = requests.post(APPS_SCRIPT_URL, json=payload)
-        response.raise_for_status()
+
+        if response.status_code != 200:
+            raise Exception(
+                f"Apps Script POST failed: {response.status_code} - "
+                f"{response.text[:500]}"
+            )
 
     def get_all_records(self):
         response = requests.get(APPS_SCRIPT_URL)
-        response.raise_for_status()
+
+        if response.status_code != 200:
+            raise Exception(
+                f"Apps Script GET failed: {response.status_code} - "
+                f"{response.text[:500]}"
+            )
 
         values = response.json()
 
