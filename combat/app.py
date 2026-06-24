@@ -5,6 +5,11 @@ from datetime import datetime
 from google_sheet import get_sheet
 from PIL import Image
 from streamlit_image_coordinates import streamlit_image_coordinates
+from PIL import Image, ImageDraw
+from streamlit_image_coordinates import streamlit_image_coordinates
+from pathlib import Path
+
+
 
 st.title("Basketball Shooting Chart")
 
@@ -22,7 +27,32 @@ if "players" not in st.session_state:
 if "shots_df" not in st.session_state:
     st.session_state.shots_df = pd.DataFrame()
 
+def draw_shots_on_court(court_img, df, display_width=450):
+    draw = ImageDraw.Draw(court_img)
 
+    original_width, original_height = court_img.size
+    scale = original_width / display_width
+
+    for _, row in df.iterrows():
+        try:
+            x = int(float(row["X"]) * scale)
+            y = int(float(row["Y"]) * scale)
+        except:
+            continue
+
+        result = row["Result"]
+        dot_color = "green" if result == "Made" else "red"
+
+        radius = int(6 * scale)
+
+        draw.ellipse(
+            (x - radius, y - radius, x + radius, y + radius),
+            fill=dot_color,
+            outline="black",
+            width=max(1, int(2 * scale))
+        )
+
+    return court_img
 def refresh_data():
     sheet = get_sheet()
     data = sheet.get_all_records()
@@ -133,47 +163,57 @@ with tab1:
         result = st.radio("Result", ["Made", "Missed"], horizontal=True)
         st.subheader("Click Shot Location")
 
-        from pathlib import Path
+        if "shot_x" not in st.session_state:
+            st.session_state.shot_x = None
+
+        if "shot_y" not in st.session_state:
+            st.session_state.shot_y = None
+
+        DISPLAY_WIDTH = 450
 
         BASE_DIR = Path(__file__).parent
-        court_img = Image.open(BASE_DIR / "court.png")
+        court_img = Image.open(BASE_DIR / "court.png").convert("RGB")
 
-        col1, col2, col3 = st.columns([1, 4, 1])
+        original_width, original_height = court_img.size
+        scale = original_width / DISPLAY_WIDTH
+        display_height = int(original_height / scale)
 
-        with col2:
-            value = streamlit_image_coordinates(
-                court_img,
-                width=450,
-                key="court_click"
+        # Draw selected shot if one exists
+        if st.session_state.shot_x is not None and st.session_state.shot_y is not None:
+            draw = ImageDraw.Draw(court_img)
+
+            # Convert display coordinates back to original image coordinates
+            x = int(st.session_state.shot_x * scale)
+            y = int(st.session_state.shot_y * scale)
+
+            dot_color = "green" if result == "Made" else "red"
+            radius = int(8 * scale)
+
+            draw.ellipse(
+                (x - radius, y - radius, x + radius, y + radius),
+                fill=dot_color,
+                outline="black",
+                width=max(1, int(2 * scale))
             )
 
+        value = streamlit_image_coordinates(
+            court_img,
+            width=DISPLAY_WIDTH,
+            key="court_click"
+        )
+
         if value is not None:
-            x_coord = value["x"]
-            y_coord = value["y"]
+            st.session_state.shot_x = value["x"]
+            st.session_state.shot_y = value["y"]
+            st.rerun()
 
-            st.session_state.shot_x = x_coord
-            st.session_state.shot_y = y_coord
-
-            st.success(f"Selected shot: X={x_coord}, Y={y_coord}")
+        if st.session_state.shot_x is not None:
+            st.success(
+                f"Selected shot: X={st.session_state.shot_x}, "
+                f"Y={st.session_state.shot_y}, Result={result}"
+            )
         else:
             st.info("Click the court to choose a shot location.")
-
-        # st.subheader("Shot Location on Court")
-
-        # x_coord = st.slider("Left / Right Court Position", 0.0, 50.0, 25.0, 0.5)
-        # y_coord = st.slider("Distance from Baseline", 0.0, 47.0, 10.0, 0.5)
-
-        # fig = draw_court()
-
-        # fig.add_trace(go.Scatter(
-        #     x=[x_coord],
-        #     y=[y_coord],
-        #     mode="markers",
-        #     marker=dict(size=14),
-        #     name="Selected Shot"
-        # ))
-
-        # st.plotly_chart(fig, use_container_width=True)
 
         if st.button("Submit Shot"):
             sheet = get_sheet()
@@ -196,6 +236,9 @@ with tab1:
                 f"{player}: {result} {shot_type} recorded at "
                 f"X={x_coord}, Y={y_coord}."
             )
+            st.session_state.shot_x = None
+            st.session_state.shot_y = None
+            st.rerun()
 
 
 # ---------- TAB 2: PLAYER STATS ----------
@@ -248,6 +291,22 @@ with tab2:
         col2.metric("FG%", f"{fg_pct}%")
         col3.metric("3PT%", f"{three_pct}%")
         col4.metric("FT%", f"{ft_pct}%")
+        
+        st.subheader("Shot Chart")
+
+        BASE_DIR = Path(__file__).parent
+        court_img = Image.open(BASE_DIR / "court.png").convert("RGB")
+
+        court_with_shots = draw_shots_on_court(
+            court_img,
+            df,
+            display_width=450
+        )
+
+        st.image(court_with_shots, width=450)
+
+        st.caption("Green = Made, Red = Missed")
+
 
         st.subheader("Shot Log")
         st.dataframe(df, use_container_width=True)
