@@ -1,23 +1,12 @@
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
 from datetime import datetime
-from google_sheet import get_sheet
-from PIL import Image
-from streamlit_image_coordinates import streamlit_image_coordinates
+from pathlib import Path
 from PIL import Image, ImageDraw
 from streamlit_image_coordinates import streamlit_image_coordinates
-from pathlib import Path
-
-
+from google_sheet import get_sheet
 
 st.title("Basketball Shooting Chart")
-
-spots = [
-    "Left Corner 3", "Left Wing", "Top Key",
-    "Right Wing", "Right Corner 3",
-    "Left Block", "Paint", "Right Block", "Free Throw"
-]
 
 shot_types = ["2PT", "3PT", "FT"]
 
@@ -27,8 +16,55 @@ if "players" not in st.session_state:
 if "shots_df" not in st.session_state:
     st.session_state.shots_df = pd.DataFrame()
 
+if "shot_x" not in st.session_state:
+    st.session_state.shot_x = None
+
+if "shot_y" not in st.session_state:
+    st.session_state.shot_y = None
+
+
+def refresh_data():
+    sheet = get_sheet()
+    data = sheet.get_all_records()
+    st.session_state.shots_df = pd.DataFrame(data)
+
+
+def load_court_image():
+    base_dir = Path(__file__).parent
+    return Image.open(base_dir / "court.png").convert("RGB")
+
+
+def draw_selected_shot(court_img, result, display_width=450):
+    if st.session_state.shot_x is None or st.session_state.shot_y is None:
+        return court_img
+
+    court_img = court_img.convert("RGBA")
+    overlay = Image.new("RGBA", court_img.size, (255, 255, 255, 0))
+    draw = ImageDraw.Draw(overlay)
+
+    original_width, original_height = court_img.size
+    scale = original_width / display_width
+
+    x = int(st.session_state.shot_x * scale)
+    y = int(st.session_state.shot_y * scale)
+
+    dot_color = (0, 180, 0, 170) if result == "Made" else (220, 0, 0, 170)
+    radius = int(6 * scale)
+
+    draw.ellipse(
+        (x - radius, y - radius, x + radius, y + radius),
+        fill=dot_color,
+        outline=(0, 0, 0, 220),
+        width=max(1, int(2 * scale))
+    )
+
+    return Image.alpha_composite(court_img, overlay).convert("RGB")
+
+
 def draw_shots_on_court(court_img, df, display_width=450):
-    draw = ImageDraw.Draw(court_img)
+    court_img = court_img.convert("RGBA")
+    overlay = Image.new("RGBA", court_img.size, (255, 255, 255, 0))
+    draw = ImageDraw.Draw(overlay)
 
     original_width, original_height = court_img.size
     scale = original_width / display_width
@@ -40,72 +76,51 @@ def draw_shots_on_court(court_img, df, display_width=450):
         except:
             continue
 
-        result = row["Result"]
-        dot_color = "green" if result == "Made" else "red"
-
-        radius = int(6 * scale)
+        dot_color = (0, 180, 0, 145) if row["Result"] == "Made" else (220, 0, 0, 145)
+        radius = int(5 * scale)
 
         draw.ellipse(
             (x - radius, y - radius, x + radius, y + radius),
             fill=dot_color,
-            outline="black",
-            width=max(1, int(2 * scale))
+            outline=(0, 0, 0, 180),
+            width=max(1, int(1.5 * scale))
         )
 
-    return court_img
-def refresh_data():
-    sheet = get_sheet()
-    data = sheet.get_all_records()
-    st.session_state.shots_df = pd.DataFrame(data)
+    # Legend
+    legend_x = int(15 * scale)
+    legend_y = int(15 * scale)
+    r = int(5 * scale)
 
-
-def draw_court():
-    fig = go.Figure()
-
-    # Outer half court
-    fig.add_shape(type="rect", x0=0, y0=0, x1=50, y1=47)
-
-    # Backboard
-    fig.add_shape(type="line", x0=22, y0=4, x1=28, y1=4)
-
-    # Hoop
-    fig.add_shape(type="circle", x0=24.25, y0=4.75, x1=25.75, y1=6.25)
-
-    # Paint
-    fig.add_shape(type="rect", x0=17, y0=0, x1=33, y1=19)
-
-    # Free throw circle
-    fig.add_shape(type="circle", x0=19, y0=13, x1=31, y1=25)
-
-    # Restricted area
-    fig.add_shape(type="path", path="M 21 4.75 Q 25 9 29 4.75")
-
-    # Three-point corners
-    fig.add_shape(type="line", x0=3, y0=0, x1=3, y1=14)
-    fig.add_shape(type="line", x0=47, y0=0, x1=47, y1=14)
-
-    # Three-point arc
-    fig.add_shape(type="path", path="M 3 14 Q 25 39 47 14")
-
-    fig.update_xaxes(range=[0, 50], showgrid=False, visible=False)
-    fig.update_yaxes(range=[0, 47], showgrid=False, visible=False)
-
-    fig.update_layout(
-        height=600,
-        margin=dict(l=10, r=10, t=10, b=10),
-        showlegend=False
+    draw.rectangle(
+        (legend_x - 8, legend_y - 8, legend_x + int(105 * scale), legend_y + int(45 * scale)),
+        fill=(255, 255, 255, 190),
+        outline=(0, 0, 0, 160)
     )
 
-    return fig
+    draw.ellipse(
+        (legend_x, legend_y, legend_x + 2*r, legend_y + 2*r),
+        fill=(0, 180, 0, 145),
+        outline=(0, 0, 0, 180)
+    )
+    draw.text((legend_x + int(18 * scale), legend_y - 2), "Made", fill=(0, 0, 0, 255))
+
+    draw.ellipse(
+        (legend_x, legend_y + int(22 * scale), legend_x + 2*r, legend_y + int(22 * scale) + 2*r),
+        fill=(220, 0, 0, 145),
+        outline=(0, 0, 0, 180)
+    )
+    draw.text((legend_x + int(18 * scale), legend_y + int(20 * scale)), "Missed", fill=(0, 0, 0, 255))
+
+    return Image.alpha_composite(court_img, overlay).convert("RGB")
 
 
-# ---------- LOAD DATA ----------
+# ---------- REFRESH ----------
 if st.button("Refresh Data"):
     refresh_data()
     st.success("Data refreshed.")
 
 
-# ---------- ROSTER SIDEBAR ----------
+# ---------- SIDEBAR ----------
 st.sidebar.header("Roster Management")
 
 if st.sidebar.button("Load Players from Sheet"):
@@ -149,7 +164,7 @@ tab1, tab2, tab3 = st.tabs([
 ])
 
 
-# ---------- TAB 1: RECORD SHOTS ----------
+# ---------- TAB 1 ----------
 with tab1:
     st.header("Record Shot")
 
@@ -161,39 +176,18 @@ with tab1:
         player = st.selectbox("Player", st.session_state.players)
         shot_type = st.selectbox("Shot Type", shot_types)
         result = st.radio("Result", ["Made", "Missed"], horizontal=True)
+
         st.subheader("Click Shot Location")
-
-        if "shot_x" not in st.session_state:
-            st.session_state.shot_x = None
-
-        if "shot_y" not in st.session_state:
-            st.session_state.shot_y = None
 
         DISPLAY_WIDTH = 450
 
-        BASE_DIR = Path(__file__).parent
-        court_img = Image.open(BASE_DIR / "court.png").convert("RGB")
+        court_img = load_court_image()
 
-        original_width, original_height = court_img.size
-        scale = original_width / DISPLAY_WIDTH
-        display_height = int(original_height / scale)
-
-        # Draw selected shot if one exists
         if st.session_state.shot_x is not None and st.session_state.shot_y is not None:
-            draw = ImageDraw.Draw(court_img)
-
-            # Convert display coordinates back to original image coordinates
-            x = int(st.session_state.shot_x * scale)
-            y = int(st.session_state.shot_y * scale)
-
-            dot_color = "green" if result == "Made" else "red"
-            radius = int(8 * scale)
-
-            draw.ellipse(
-                (x - radius, y - radius, x + radius, y + radius),
-                fill=dot_color,
-                outline="black",
-                width=max(1, int(2 * scale))
+            court_img = draw_selected_shot(
+                court_img,
+                result,
+                display_width=DISPLAY_WIDTH
             )
 
         value = streamlit_image_coordinates(
@@ -203,45 +197,66 @@ with tab1:
         )
 
         if value is not None:
-            st.session_state.shot_x = value["x"]
-            st.session_state.shot_y = value["y"]
-            st.rerun()
+            old_x = st.session_state.shot_x
+            old_y = st.session_state.shot_y
+
+            new_x = value["x"]
+            new_y = value["y"]
+
+            if old_x != new_x or old_y != new_y:
+                st.session_state.shot_x = new_x
+                st.session_state.shot_y = new_y
+                st.rerun()
 
         if st.session_state.shot_x is not None:
-            st.success(
-                f"Selected shot: X={st.session_state.shot_x}, "
-                f"Y={st.session_state.shot_y}, Result={result}"
-            )
+            if st.session_state.shot_x is not None:
+                st.caption("Shot location selected.")
+            else:
+                st.info("Click the court to choose a shot location.")
+            # st.success(
+            #     f"Selected shot: X={st.session_state.shot_x}, "
+            #     f"Y={st.session_state.shot_y}, Result={result}"
+            # )
         else:
             st.info("Click the court to choose a shot location.")
 
         if st.button("Submit Shot"):
-            sheet = get_sheet()
+            st.write("Submit clicked")
 
-            row = [
-                str(practice_date),
-                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                player,
-                shot_type,
-                "Court Click",
-                result,
-                st.session_state.shot_x,
-                st.session_state.shot_y
-            ]
+            if st.session_state.shot_x is None or st.session_state.shot_y is None:
+                st.warning("No shot location stored.")
+            else:
+                try:
+                    row = [
+                        str(practice_date),
+                        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        player,
+                        shot_type,
+                        "Court Click",
+                        result,
+                        st.session_state.shot_x,
+                        st.session_state.shot_y
+                    ]
 
-            sheet.append_row(row)
-            refresh_data()
+                    # st.write("Saving row:", row)
 
-            st.success(
-                f"{player}: {result} {shot_type} recorded at "
-                f"X={x_coord}, Y={y_coord}."
-            )
-            st.session_state.shot_x = None
-            st.session_state.shot_y = None
-            st.rerun()
+                    sheet = get_sheet()
+                    sheet.append_row(row)
 
+                    st.success("Shot saved!")
+                    # if st.button("Clear Selected Shot"):
+                    #     st.session_state.shot_x = None
+                    #     st.session_state.shot_y = None
+                        # st.rerun()
 
-# ---------- TAB 2: PLAYER STATS ----------
+                    # st.session_state.shot_x = None
+                    # st.session_state.shot_y = None
+
+                except Exception as e:
+                    st.error("Submit Shot failed.")
+                    st.exception(e)
+
+# ---------- TAB 2 ----------
 with tab2:
     st.header("Player Statistics")
 
@@ -291,12 +306,10 @@ with tab2:
         col2.metric("FG%", f"{fg_pct}%")
         col3.metric("3PT%", f"{three_pct}%")
         col4.metric("FT%", f"{ft_pct}%")
-        
+
         st.subheader("Shot Chart")
 
-        BASE_DIR = Path(__file__).parent
-        court_img = Image.open(BASE_DIR / "court.png").convert("RGB")
-
+        court_img = load_court_image()
         court_with_shots = draw_shots_on_court(
             court_img,
             df,
@@ -304,9 +317,7 @@ with tab2:
         )
 
         st.image(court_with_shots, width=450)
-
         st.caption("Green = Made, Red = Missed")
-
 
         st.subheader("Shot Log")
         st.dataframe(df, use_container_width=True)
@@ -338,26 +349,8 @@ with tab2:
 
         st.dataframe(type_stats, use_container_width=True)
 
-        st.subheader("Location Stats")
 
-        location_stats = (
-            df.groupby(["Player", "Shot Type"])
-            .agg(
-                Attempts=("Result", "count"),
-                Makes=("Result", lambda x: (x == "Made").sum())
-            )
-            .reset_index()
-        )
-
-        location_stats["Shot %"] = round(
-            location_stats["Makes"] / location_stats["Attempts"] * 100,
-            1
-        )
-
-        st.dataframe(location_stats, use_container_width=True)
-
-
-# ---------- TAB 3: TEAM STATS ----------
+# ---------- TAB 3 ----------
 with tab3:
     st.header("Team Statistics")
 
@@ -397,6 +390,18 @@ with tab3:
         col2.metric("Team FG%", f"{fg_pct}%")
         col3.metric("Team 3PT%", f"{three_pct}%")
         col4.metric("Team FT%", f"{ft_pct}%")
+
+        st.subheader("Team Shot Chart")
+
+        court_img = load_court_image()
+        court_with_shots = draw_shots_on_court(
+            court_img,
+            df,
+            display_width=450
+        )
+
+        st.image(court_with_shots, width=450)
+        st.caption("Green = Made, Red = Missed")
 
         csv = df.to_csv(index=False)
 
